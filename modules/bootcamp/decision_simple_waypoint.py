@@ -13,7 +13,6 @@ from .. import drone_status
 from .. import location
 from ..private.decision import base_decision
 
-
 # Disable for bootcamp use
 # No enable
 # pylint: disable=duplicate-code,unused-argument
@@ -43,35 +42,38 @@ class DecisionSimpleWaypoint(base_decision.BaseDecision):
         # ↑ BOOTCAMPERS MODIFY ABOVE THIS COMMENT ↑
         # ============
 
-    def run(
-        self, report: drone_report.DroneReport, landing_pad_locations: "list[location.Location]"
-    ) -> commands.Command:
-        """
-        Make the drone fly to the waypoint.
+    def run(self, report: drone_report.DroneReport, landing_pad_locations: "list[location.Location]") -> commands.Command:
+        current_position = report.position
+        current_status = report.status
 
-        You are allowed to create as many helper methods as you want,
-        as long as you do not change the __init__() and run() signatures.
+        distance = self._distance_to_waypoint(current_position)
 
-        This method will be called in an infinite loop, something like this:
+        if distance <= self.acceptance_radius:
+            if current_status == drone_status.DroneStatus.HALTED:
+                return commands.Command.create_land_command()
+            else:
+                return commands.Command.create_halt_command()
 
-        ```py
-        while True:
-            report, landing_pad_locations = get_input()
-            command = Decision.run(report, landing_pad_locations)
-            put_output(command)
-        ```
-        """
-        # Default command
-        command = commands.Command.create_null_command()
+        if current_status == drone_status.DroneStatus.HALTED:
+            dx, dy = self._get_relative_vector(current_position)
+            return commands.Command.create_set_relative_destination_command(dx, dy)
 
-        # ============
-        # ↓ BOOTCAMPERS MODIFY BELOW THIS COMMENT ↓
-        # ============
+        return commands.Command.create_null_command()
 
-        # Do something based on the report and the state of this class...
 
-        # ============
-        # ↑ BOOTCAMPERS MODIFY ABOVE THIS COMMENT ↑
-        # ============
+    def _distance_to_waypoint(self, position: location.Location) -> float:
+        dx = self.waypoint.location_x - position.location_x
+        dy = self.waypoint.location_y - position.location_y
+        return (dx**2 + dy**2)**0.5
 
-        return command
+    def _get_relative_vector(self, position: location.Location) -> tuple[float, float]:
+        dx = self.waypoint.location_x - position.location_x
+        dy = self.waypoint.location_y - position.location_y
+        distance = (dx**2 + dy**2)**0.5
+
+        if distance == 0:
+            return (0.0, 0.0)
+
+        max_step = 10.0
+        scale = min(max_step / distance, 1.0)
+        return (dx * scale, dy * scale)
